@@ -1,8 +1,9 @@
 import scraper
 
 def main():
-    eia_scraper = scraper.EIAScraper()
+    eia_scraper = scraper.EIAScraper(output_type='pandas')
 
-    print(eia_scraper.scrape())
+    # just downloading to CWD for now.
+    eia_scraper.scrape().to_csv('EnergyData.csv')
 
 main()
