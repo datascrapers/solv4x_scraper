@@ -1,0 +1,19 @@
+# all configuration options with their defaults shown below:
+
+# $configDir == <home directory>/.datascrapers
+
+# where the config file is located
+path: #$configDir/config.yml
+
+# API Key used to connect to EIA.gov
+EIA_APIKey: #set to Thomas' key
+
+# save Pandas DataFrame to a CSV file
+saveCSVFile: true
+# where that CSV is located
+CSVFilePath: #$configDir/EnergyData.csv
+
+# save Pandas DataFrame to Google Firestore database 
+saveToDatabase: true
+# where the Google Firestore credentials file is located
+firestoreKeyPath: #$configDir/firestoreCreds.json
