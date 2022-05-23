@@ -1,5 +1,6 @@
 import os, sys
 from pathlib import Path # used for config and CSV file creation
+from datetime import datetime, timedelta # used for 'from' param for EIA API call
 
 from dataclasses import dataclass, field, fields # used for config object
 import yaml # used for config file
@@ -24,13 +25,16 @@ def err(err_msg):
   print(err_msg)
   sys.exit(1)
 
+def yesterday():
+  return (datetime.now() - timedelta(1)).strftime('%Y%m%dT00Z')
+
 # returns EIA API output as json object
 def scrape():
   URL = 'https://api.eia.gov/series/'
   PARAMS = {
     'api_key': config.EIA_APIKey,
     'series_id': ';'.join(series_name_map),
-    'num': 24, # num is the number of rows to return for each series
+    'start': yesterday(), # start == 12AM yesterday
   }
 
   try:
