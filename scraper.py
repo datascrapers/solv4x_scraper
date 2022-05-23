@@ -4,6 +4,7 @@ from datetime import datetime, timedelta # used for 'from' param for EIA API cal
 
 from dataclasses import dataclass, field, fields # used for config object
 import yaml # used for config file
+import json # used for JSON file
 
 import requests
 import pandas as pd
@@ -76,6 +77,22 @@ def json_to_pd(json_data):
 
   return df
 
+def pd_to_json(df, save_file=None, as_dict=False):
+  # set index label to the date
+  df.set_axis(df['Date'], axis='index', inplace=True)
+
+  # orient='index' sets the keys (rows) to index labels
+  # double_precision = 0 essentially casts float to int
+  json_str = df.to_json(path_or_buf=save_file, orient='index', double_precision=0)
+
+  if save_file is not None:
+    return
+
+  if as_dict:
+    return json.loads(json_str)
+
+  return json_str
+
 def save_csv(df):
   # create a csv from the DataFrame
   df.to_csv(config.CSVFilePath)
@@ -83,6 +100,8 @@ def save_csv(df):
   # prints out dataframe
   print(df)
 
+def save_json(df):
+  pd_to_json(df, save_file=config.JSONFilePath)
 
 def upload_to_db(df):
   # Initialize the database credentials
@@ -92,16 +111,17 @@ def upload_to_db(df):
   # Database Connection
   db = firestore.client()
 
-  # Add Data From the Dataframe to the Database
-  for _, row in df.iterrows():
-    cols = {'Date': str(row['Date'])}
-    for col, val in row.items():
-      if col != 'Date':
-        cols[col] = int(val) # XXX does EIA ever return floats that have a fractional?
+  # root collection reference
+  db_root_ref = db.collection('California Renewable Energy')
 
-    db.collection('California Renewable Energy') \
-      .document(row['Date'])                     \
-      .add(cols)
+  df_json = pd_to_json(df, as_dict=True)
+
+  # update database in one atomic operation
+  batch = db.batch()
+  for date, cols in df_json.items():
+    row_doc = db_root_ref.document(date)
+    batch.set(row_doc, cols, merge=True)
+  batch.commit()
 
 # create a Config dataclass and initialize it with default config options
 # exceptions raised are caught in init_config()
@@ -115,6 +135,9 @@ class Config:
   saveCSVFile: bool = True
   CSVFilePath: Path = None
 
+  saveJSONFile: bool = True
+  JSONFilePath: Path = None
+
   firestoreKeyPath: Path = None
   saveToDatabase: bool = True
 
@@ -124,6 +147,7 @@ class Config:
     self.path = self._config_dir / 'config.yml'
 
     self.CSVFilePath      = self._config_dir / 'EnergyData.csv'
+    self.JSONFilePath     = self._config_dir / 'EnergyData.json'
     self.firestoreKeyPath = self._config_dir / 'firestoreCreds.json'
 
 
@@ -158,6 +182,9 @@ def main():
 
   if config.saveCSVFile:
     save_csv(df)
+
+  if config.saveJSONFile:
+    save_json(df)
 
   if config.saveToDatabase:
     upload_to_db(df)
