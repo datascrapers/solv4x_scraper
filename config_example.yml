@@ -8,10 +8,18 @@ path: #$configDir/config.yml
 # API Key used to connect to EIA.gov
 EIA_APIKey: #set to Thomas' key
 
+# print the EIA output to screen
+printData: false
+
 # save Pandas DataFrame to a CSV file
 saveCSVFile: true
-# where that CSV is located
+# where that CSV file is located
 CSVFilePath: #$configDir/EnergyData.csv
+
+# save JSON converted DataFrame to a JSON file
+saveJSONFile: true
+# where that JSON file is located
+JSONFilePath: #$configDir/EnergyData.json
 
 # save Pandas DataFrame to Google Firestore database 
 saveToDatabase: true

@@ -131,7 +131,7 @@ def upload_to_db(df):
 # exceptions raised are caught in init_config()
 @dataclass
 class Config:
-  _config_dir: Path = Path.home() / '.datascrapers'
+  _config_dir: Path = Path.cwd()
   path: Path = None
 
   EIA_APIKey: str = 'L08gD6TFlLdYhl1sJKagbCVA5AJmcjCVOlWbUEdz'
@@ -167,8 +167,8 @@ def init_config():
     err(f'problem creating config object: {e}')
     
   # open the YAML config file and reassign options it specifies in Config
-  with open(config.path) as config_file:
-    try:
+  try:
+    with open(config.path) as config_file:
       config_file = yaml.safe_load(config_file) # loaded as a dict
 
       for opt, val in config_file.items():
@@ -176,11 +176,11 @@ def init_config():
           setattr(config, opt, val)
         else:
           print(f'ignoring invalid option `{opt} in config file.')
-    except yaml.YAMLError as e:
-      print(f'problem loading config file: {e}')
-      print('using default config settings.')
+  except (FileNotFoundError, yaml.YAMLError) as e:
+    print(f'problem loading config file: {e}')
+    print('using default config settings.')
 
-def main():
+def main(ev, ctx):
   init_config()
 
   json_output = scrape()
@@ -200,5 +200,5 @@ def main():
 
   return 0
 
-if __name__ == '__main__':
-  sys.exit(main())
+#if __name__ == '__main__':
+#  sys.exit(main())

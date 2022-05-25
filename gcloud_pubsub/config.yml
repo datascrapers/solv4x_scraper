@@ -1,0 +1,4 @@
+saveCSVFile: false
+saveJSONFile: false
+saveToDatabase: true
+printData: false

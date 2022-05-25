@@ -1,3 +1,3 @@
-**Solv4x Scraper**
+# Solv4x Scraper
 
-Thomas is testing making changes
+Refer to the [gcloud_pubsub](gcloud_pubsub/) folder for Pub/Sub automation method
