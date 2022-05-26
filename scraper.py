@@ -132,7 +132,7 @@ def upload_to_db(df):
 @dataclass
 class Config:
   _config_dir: Path = Path.home() / '.datascrapers'
-  path: Path = None
+  _path: Path = None
 
   EIA_APIKey: str = 'L08gD6TFlLdYhl1sJKagbCVA5AJmcjCVOlWbUEdz'
 
@@ -150,12 +150,21 @@ class Config:
   def __post_init__(self):
     self._config_dir.mkdir(parents=True, exist_ok=True)
 
-    self.path = self._config_dir / 'config.yml'
+    self._path = self._config_dir / 'config.yml'
 
     self.CSVFilePath      = self._config_dir / 'EnergyData.csv'
     self.JSONFilePath     = self._config_dir / 'EnergyData.json'
     self.firestoreKeyPath = self._config_dir / 'firestoreCreds.json'
 
+  def add_config_file(self, config_file):
+    for opt, val in config_file.items():
+      if hasattr(config, opt):
+        if val is None:
+          print(f'ignoring empty value for `{opt}` in config file.')
+        else:
+          setattr(config, opt, val)
+      else:
+        print(f'ignoring invalid option `{opt}` in config file.')
 
 def init_config():
   # `config` is global so that any function can access the config settings
@@ -167,18 +176,14 @@ def init_config():
     err(f'problem creating config object: {e}')
     
   # open the YAML config file and reassign options it specifies in Config
-  with open(config.path) as config_file:
-    try:
+  try:
+    with open(config._path) as config_file:
       config_file = yaml.safe_load(config_file) # loaded as a dict
 
-      for opt, val in config_file.items():
-        if hasattr(config, opt):
-          setattr(config, opt, val)
-        else:
-          print(f'ignoring invalid option `{opt} in config file.')
-    except yaml.YAMLError as e:
-      print(f'problem loading config file: {e}')
-      print('using default config settings.')
+      config.add_config_file(config_file)
+  except (FileNotFoundError, yaml.YAMLError) as e:
+    print(f'problem loading config file: {e}')
+    print('using default config settings.')
 
 def main():
   init_config()

@@ -2,9 +2,6 @@
 
 # $configDir == <home directory>/.datascrapers
 
-# where the config file is located
-path: #$configDir/config.yml
-
 # API Key used to connect to EIA.gov
 EIA_APIKey: #set to Thomas' key
 
