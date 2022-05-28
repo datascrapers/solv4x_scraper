@@ -26,6 +26,7 @@ def err(err_msg):
   print(err_msg)
   sys.exit(1)
 
+# returns the date of 12AM yesterday in EIA's time format.
 def yesterday():
   return (datetime.now() - timedelta(1)).strftime('%Y%m%dT00Z')
 
@@ -55,6 +56,12 @@ def scrape():
 
   return json_data
 
+def format_date(df):
+  new_format = '%Y-%m-%dT%H:%M:%S.000Z' # min, sec, and ms are always zero
+
+  df['Date'] = pd.to_datetime(df.Date)
+  df['Date'] = df['Date'].dt.strftime(new_format)
+
 def json_to_pd(json_data):
   df = None
   # loop through series list returned by EIAs API and add them to a pandas dataframe
@@ -74,6 +81,8 @@ def json_to_pd(json_data):
       df = df.merge(df_to_merge, how='outer', left_on='Date', right_on='Date')
 
   assert(df is not None)
+
+  format_date(df)
 
   return df
 
