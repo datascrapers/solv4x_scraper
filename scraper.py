@@ -167,11 +167,11 @@ class Config:
 
   def add_config_file(self, config_file):
     for opt, val in config_file.items():
-      if hasattr(config, opt):
+      if hasattr(self, opt):
         if val is None:
           print(f'ignoring empty value for `{opt}` in config file.')
         else:
-          setattr(config, opt, val)
+          setattr(self, opt, val)
       else:
         print(f'ignoring invalid option `{opt}` in config file.')
 

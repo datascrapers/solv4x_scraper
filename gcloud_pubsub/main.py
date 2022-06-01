@@ -26,6 +26,7 @@ def err(err_msg):
   print(err_msg)
   sys.exit(1)
 
+# returns the date of 12AM yesterday in EIA's time format.
 def yesterday():
   return (datetime.now() - timedelta(1)).strftime('%Y%m%dT00Z')
 
@@ -55,6 +56,12 @@ def scrape():
 
   return json_data
 
+def format_date(df):
+  new_format = '%Y-%m-%dT%H:%M:%S.000Z' # min, sec, and ms are always zero
+
+  df['Date'] = pd.to_datetime(df.Date)
+  df['Date'] = df['Date'].dt.strftime(new_format)
+
 def json_to_pd(json_data):
   df = None
   # loop through series list returned by EIAs API and add them to a pandas dataframe
@@ -74,6 +81,8 @@ def json_to_pd(json_data):
       df = df.merge(df_to_merge, how='outer', left_on='Date', right_on='Date')
 
   assert(df is not None)
+
+  format_date(df)
 
   return df
 
@@ -132,7 +141,7 @@ def upload_to_db(df):
 @dataclass
 class Config:
   _config_dir: Path = Path.cwd()
-  path: Path = None
+  _path: Path = None
 
   EIA_APIKey: str = 'L08gD6TFlLdYhl1sJKagbCVA5AJmcjCVOlWbUEdz'
 
@@ -150,12 +159,21 @@ class Config:
   def __post_init__(self):
     self._config_dir.mkdir(parents=True, exist_ok=True)
 
-    self.path = self._config_dir / 'config.yml'
+    self._path = self._config_dir / 'config.yml'
 
     self.CSVFilePath      = self._config_dir / 'EnergyData.csv'
     self.JSONFilePath     = self._config_dir / 'EnergyData.json'
     self.firestoreKeyPath = self._config_dir / 'firestoreCreds.json'
 
+  def add_config_file(self, config_file):
+    for opt, val in config_file.items():
+      if hasattr(self, opt):
+        if val is None:
+          print(f'ignoring empty value for `{opt}` in config file.')
+        else:
+          setattr(self, opt, val)
+      else:
+        print(f'ignoring invalid option `{opt}` in config file.')
 
 def init_config():
   # `config` is global so that any function can access the config settings
@@ -168,14 +186,10 @@ def init_config():
     
   # open the YAML config file and reassign options it specifies in Config
   try:
-    with open(config.path) as config_file:
+    with open(config._path) as config_file:
       config_file = yaml.safe_load(config_file) # loaded as a dict
 
-      for opt, val in config_file.items():
-        if hasattr(config, opt):
-          setattr(config, opt, val)
-        else:
-          print(f'ignoring invalid option `{opt} in config file.')
+      config.add_config_file(config_file)
   except (FileNotFoundError, yaml.YAMLError) as e:
     print(f'problem loading config file: {e}')
     print('using default config settings.')
