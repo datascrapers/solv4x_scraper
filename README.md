@@ -10,4 +10,4 @@ Automate main.py with Google Cloud Compute Engine
 -Install python and all the module in the requirements.txt file
 
 
--Setup a crontab job(crontab -e), use this command to run the script at 5am everyday (0 5 * * * * python3 (path of main.py) 2>&1 > (path to save a crontab log file))
+-Setup a crontab job `crontab -e`, use this command to run the script at 5am everyday `0 5 * * * * python3 (path of main.py) 2>&1 > (path to save a crontab log file)`
