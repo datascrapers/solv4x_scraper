@@ -7,6 +7,9 @@ Automate main.py with Google Cloud Compute Engine
 -Setup a vitrual machine instance.
 
 
+-Create Directory for project files and save the project files to the directory.
+
+
 -Install python and all the module in the requirements.txt file
 
 
