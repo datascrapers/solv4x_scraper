@@ -22,3 +22,7 @@ JSONFilePath: #$configDir/EnergyData.json
 saveToDatabase: true
 # where the Google Firestore credentials file is located
 firestoreKeyPath: #$configDir/firestoreCreds.json
+
+# how many days of forecasting data to keep in the database, in days
+# NOTE: default of 0 means to keep one script execution's worth of days (which starts at yesterday's date)
+rotateDatabase: 0

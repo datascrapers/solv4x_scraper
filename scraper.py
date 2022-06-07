@@ -26,9 +26,18 @@ def err(err_msg):
   print(err_msg)
   sys.exit(1)
 
+# return the date 12AM of T - @at days in EIA's time format or ISO format if isoFormat=True
+def get_previous_day(at, isoFormat=False):
+  prev_day = datetime.now() - timedelta(at)
+
+  if isoFormat:
+    return prev_day.strftime('%Y-%m-%dT00:00:00.000Z')
+
+  return prev_day.strftime('%Y%m%dT00Z')
+
 # returns the date of 12AM yesterday in EIA's time format.
 def yesterday():
-  return (datetime.now() - timedelta(1)).strftime('%Y%m%dT00Z')
+  return get_previous_day(1)
 
 # returns EIA API output as json object
 def scrape():
@@ -116,6 +125,16 @@ def save_csv(df):
 def save_json(df):
   pd_to_json(df, save_file=config.JSONFilePath)
 
+def rotate_db(db_collection):
+  if config.rotateDatabase < 2:
+    return
+
+  oldest_day_to_keep = get_previous_day(config.rotateDatabase, isoFormat=True)
+
+  rows_to_prune = db_collection.where('Date', '<', oldest_day_to_keep).stream()
+  for row in rows_to_prune:
+    row.reference.delete()
+
 def upload_to_db(df):
   # Initialize the database credentials
   cred = credentials.Certificate(config.firestoreKeyPath)
@@ -128,6 +147,9 @@ def upload_to_db(df):
   db_root_ref = db.collection('California Renewable Energy')
 
   df_json = pd_to_json(df, as_dict=True)
+
+  # prune old rows if rotateDatabase is set
+  rotate_db(db_root_ref)
 
   # update database in one atomic operation
   batch = db.batch()
@@ -155,6 +177,7 @@ class Config:
 
   firestoreKeyPath: Path = None
   saveToDatabase: bool = True
+  rotateDatabase: int = 0
 
   def __post_init__(self):
     self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +206,7 @@ def init_config():
     config = Config()
   except Exception as e:
     err(f'problem creating config object: {e}')
-    
+
   # open the YAML config file and reassign options it specifies in Config
   try:
     with open(config._path) as config_file:
