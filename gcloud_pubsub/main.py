@@ -16,9 +16,9 @@ from firebase_admin import firestore
 # key: Series Id. This identifies the specific data we are targeting. You can find this in the EIA API documents.
 # val: Column names that will be used for this series ID.
 series_name_map = {
-  'EBA.CAL-ALL.DF.H':     'Demand Forecast',
-  'EBA.CAL-ALL.NG.SUN.H': 'Solar Generation',
-  'EBA.CAL-ALL.NG.WND.H': 'Wind Generation',
+  'EBA.CAL-ALL.DF.HL':     'Demand Forecast',
+  'EBA.CAL-ALL.NG.SUN.HL': 'Solar Generation',
+  'EBA.CAL-ALL.NG.WND.HL': 'Wind Generation',
 }
 
 # log an error message then exit the program cleanly.
@@ -26,9 +26,21 @@ def err(err_msg):
   print(err_msg)
   sys.exit(1)
 
+# return the date 12AM of T - @at days in EIA's time format or ISO format if isoFormat=True
+# for EIA, we set local=True to make sure the start parameter asks for 12AM localtime.
+def get_previous_day(at, isoFormat=False, local=False):
+  prev_day = datetime.now() - timedelta(at)
+
+  timezone = 'L' if local else 'Z'
+
+  if isoFormat:
+    return prev_day.strftime(f'%Y-%m-%dT00:00:00.000{timezone}')
+
+  return prev_day.strftime(f'%Y%m%dT00{timezone}')
+
 # returns the date of 12AM yesterday in EIA's time format.
 def yesterday():
-  return (datetime.now() - timedelta(1)).strftime('%Y%m%dT00Z')
+  return get_previous_day(1, local=True)
 
 # returns EIA API output as json object
 def scrape():
@@ -56,12 +68,15 @@ def scrape():
 
   return json_data
 
+# format date columns to be human readable in the database
 def format_date(df):
-  new_format = '%Y-%m-%dT%H:%M:%S.000Z' # min, sec, and ms are always zero
+  new_utc_format   = '%Y-%m-%dT%H:%M:%S.000Z' # min, sec, and ms are always zero
+  new_local_format = '%Y-%m-%dT%H:%M:%S.000%z' # local time with UTC offset
 
-  df['Date'] = pd.to_datetime(df.Date)
-  df['Date'] = df['Date'].dt.strftime(new_format)
+  df.insert(1, 'LocalDate', pd.to_datetime(df.Date).dt.strftime(new_local_format))
+  df['Date'] = pd.to_datetime(df.Date, utc=True).dt.strftime(new_utc_format)
 
+# convert EIA JSON output to a Pandas Dataframe
 def json_to_pd(json_data):
   df = None
   # loop through series list returned by EIAs API and add them to a pandas dataframe
@@ -86,13 +101,16 @@ def json_to_pd(json_data):
 
   return df
 
-def pd_to_json(df, save_file=None, as_dict=False):
-  # set index label to the date
-  df.set_axis(df['Date'], axis='index', inplace=True)
+# convert new Dataframe back into a JSON object for the Firebase database
+def pd_to_json(df, save_file=None, as_dict=False, orient='index'):
+  if orient != 'table':
+    # set index label to the date
+    df.set_axis(df['Date'], axis='index', inplace=True)
 
   # orient='index' sets the keys (rows) to index labels
   # double_precision = 0 essentially casts float to int
-  json_str = df.to_json(path_or_buf=save_file, orient='index', double_precision=0)
+  # orient='table' is used for the JSON file
+  json_str = df.to_json(path_or_buf=save_file, orient=orient, double_precision=0)
 
   if save_file is not None:
     return
@@ -102,19 +120,40 @@ def pd_to_json(df, save_file=None, as_dict=False):
 
   return json_str
 
+# print the dataframe to stdout
 def print_df(df):
   if not isinstance(df, pd.DataFrame):
     return
 
-  # prints out dataframe to stdout
   print(df)
 
+# create a CSV file from the DataFrame
 def save_csv(df):
-  # create a csv from the DataFrame
   df.to_csv(config.CSVFilePath)
 
+# create a JSON file from the DataFrame
+# orient='table' used for easier Tableau integration
 def save_json(df):
-  pd_to_json(df, save_file=config.JSONFilePath)
+  pd_to_json(df, save_file=config.JSONFilePath, orient='table')
+
+# prune old rows in Firebase database if rotateDatabase is set
+# called in upload_to_db()
+def rotate_db(db_collection):
+  if config.rotateDatabase < 2:
+    return
+
+  # get the oldest day to keep, in localtime
+  # [:-1] cuts off the Z at the end of the date, because we want to check the localtime of 00:00.
+  # the UTC offset can be ignored because it will be the same for all rows and it won't affect our `where` query.
+  oldest_day_to_keep = get_previous_day(config.rotateDatabase, isoFormat=True)[:-1]
+
+  rows_to_prune = db_collection.where('LocalDate', '<', oldest_day_to_keep).stream()
+
+  if rows_to_prune:
+    print('db: pruning old database rows...')
+
+  for row in rows_to_prune:
+    row.reference.delete()
 
 def upload_to_db(df):
   # Initialize the database credentials
@@ -128,6 +167,8 @@ def upload_to_db(df):
   db_root_ref = db.collection('California Renewable Energy')
 
   df_json = pd_to_json(df, as_dict=True)
+
+  rotate_db(db_root_ref)
 
   # update database in one atomic operation
   batch = db.batch()
@@ -155,6 +196,7 @@ class Config:
 
   firestoreKeyPath: Path = None
   saveToDatabase: bool = True
+  rotateDatabase: int = 0
 
   def __post_init__(self):
     self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -175,6 +217,7 @@ class Config:
       else:
         print(f'ignoring invalid option `{opt}` in config file.')
 
+# configuration initialization
 def init_config():
   # `config` is global so that any function can access the config settings
   global config
@@ -183,7 +226,7 @@ def init_config():
     config = Config()
   except Exception as e:
     err(f'problem creating config object: {e}')
-    
+
   # open the YAML config file and reassign options it specifies in Config
   try:
     with open(config._path) as config_file:
@@ -197,19 +240,24 @@ def init_config():
 def main(ev, ctx):
   init_config()
 
+  print('scraping EIA.gov...')
   json_output = scrape()
+  print('converting JSON to a pandas DataFrame...')
   df = json_to_pd(json_output)
 
   if config.printData:
     print_df(df)
 
   if config.saveCSVFile:
+    print('saving CSV file...')
     save_csv(df)
 
   if config.saveJSONFile:
+    print('saving JSON file...')
     save_json(df)
 
   if config.saveToDatabase:
+    print('uploading to database...')
     upload_to_db(df)
 
   return 0
