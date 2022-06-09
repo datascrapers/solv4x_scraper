@@ -102,13 +102,15 @@ def json_to_pd(json_data):
   return df
 
 # convert new Dataframe back into a JSON object for the Firebase database
-def pd_to_json(df, save_file=None, as_dict=False):
-  # set index label to the date
-  df.set_axis(df['Date'], axis='index', inplace=True)
+def pd_to_json(df, save_file=None, as_dict=False, orient='index'):
+  if orient != 'table':
+    # set index label to the date
+    df.set_axis(df['Date'], axis='index', inplace=True)
 
   # orient='index' sets the keys (rows) to index labels
   # double_precision = 0 essentially casts float to int
-  json_str = df.to_json(path_or_buf=save_file, orient='index', double_precision=0)
+  # orient='table' is used for the JSON file
+  json_str = df.to_json(path_or_buf=save_file, orient=orient, double_precision=0)
 
   if save_file is not None:
     return
@@ -130,8 +132,9 @@ def save_csv(df):
   df.to_csv(config.CSVFilePath)
 
 # create a JSON file from the DataFrame
+# orient='table' used for easier Tableau integration
 def save_json(df):
-  pd_to_json(df, save_file=config.JSONFilePath)
+  pd_to_json(df, save_file=config.JSONFilePath, orient='table')
 
 # prune old rows in Firebase database if rotateDatabase is set
 # called in upload_to_db()
